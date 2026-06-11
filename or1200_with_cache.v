@@ -1,4 +1,4 @@
-module or1200_cached(
+module or1200_with_cache(
     input clk,
     input rst,
 
@@ -9,8 +9,10 @@ module or1200_cached(
     output [31:0] reg_r5, reg_r6, reg_r7, reg_r8,
 
     // Cache statistics
-    output [31:0] total_cache_hits,
-    output [31:0] total_cache_misses
+    output [31:0] icache_hits,
+    output [31:0] icache_misses,
+    output [31:0] dcache_hits,
+    output [31:0] dcache_misses
 );
 
     // ── Internal Signals ────────────────────────────
@@ -19,7 +21,6 @@ module or1200_cached(
     wire [31:0] if_addr;
     wire        if_read;
     wire [31:0] if_instruction;
-    wire        if_hit;
     wire        if_stall_cache;
 
     // Data memory
@@ -27,15 +28,13 @@ module or1200_cached(
     wire [31:0] mem_data_write;
     wire        mem_read;
     wire        mem_write;
-    wire [1:0]  mem_size;
     wire [31:0] mem_data_read;
-    wire        mem_hit;
     wire        mem_stall_cache;
 
-    // Combined stall signal
-    wire        pipeline_stall = if_stall_cache || mem_stall_cache;
+    // Combined stall
+    wire pipeline_stall = if_stall_cache || mem_stall_cache;
 
-    // ── Pipeline (Phase 2) ──────────────────────────
+    // ── Phase 2 Pipeline ────────────────────────────
 
     or1200_pipeline pipeline(
         .clk(clk),
@@ -58,26 +57,25 @@ module or1200_cached(
         .reg_r8(reg_r8)
     );
 
-    // ── Memory Hierarchy (Phase 3) ──────────────────
+    // ── Cache System (Phase 3) ──────────────────────
 
-    memory_hierarchy mem_hier(
+    cache_wrapper cache_sys(
         .clk(clk),
         .rst(rst),
         .if_addr(if_addr),
         .if_read(if_read),
         .if_instruction(if_instruction),
-        .if_hit(if_hit),
         .if_stall(if_stall_cache),
         .mem_addr(mem_addr),
         .mem_data_write(mem_data_write),
         .mem_read(mem_read),
         .mem_write(mem_write),
-        .mem_size(mem_size),
         .mem_data_read(mem_data_read),
-        .mem_hit(mem_hit),
         .mem_stall(mem_stall_cache),
-        .total_hits(total_cache_hits),
-        .total_misses(total_cache_misses)
+        .icache_hits(icache_hits),
+        .icache_misses(icache_misses),
+        .dcache_hits(dcache_hits),
+        .dcache_misses(dcache_misses)
     );
 
     // ── Instruction Fetch Control ───────────────────
@@ -92,9 +90,5 @@ module or1200_cached(
         else if (!pipeline_stall && !if_stall_cache)
             pc <= pc + 4;
     end
-
-    // ── Data Size Control ───────────────────────────
-
-    assign mem_size = 2'b10;  // Always word access (32-bit)
 
 endmodule
